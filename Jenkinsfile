@@ -11,8 +11,16 @@ pipeline {
     }
 
     stages {
+        stage('Clean Workspace') {
+            // Guarantees a clean build: nothing is reused from earlier builds
+            steps {
+                deleteDir()
+            }
+        }
+
         stage('Checkout') {
             steps {
+                // Pull the latest code from GitHub
                 checkout scm
             }
         }
