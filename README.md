@@ -111,3 +111,4 @@ is merged through pull requests (which trigger the CI workflow). Commits follow
 ## Known limitations
 No authentication (the desktop v3.x login used plaintext passwords and was intentionally not
 ported), no PDF export, and SQLite is single-writer — fine for this assignment, not for scale.
+
