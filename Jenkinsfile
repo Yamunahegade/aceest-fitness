@@ -13,25 +13,39 @@ pipeline {
     stages {
         stage('Checkout') {
             steps {
-                // Pulls the latest code from GitHub (configured in the Jenkins job)
                 checkout scm
             }
         }
 
-        stage('Clean Build Environment') {
+        stage('Install Dependencies') {
             steps {
-                sh 'docker rmi -f ${IMAGE_NAME}:${BUILD_NUMBER} ${IMAGE_NAME}-test:${BUILD_NUMBER} || true'
+                sh '''
+                    python3 -m venv .venv
+                    . .venv/bin/activate
+                    pip install --quiet -r requirements-dev.txt
+                '''
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Lint') {
             steps {
-                sh 'docker build --no-cache -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
+                sh '. .venv/bin/activate && flake8 .'
             }
         }
 
         stage('Quality Gate: Pytest') {
             steps {
+                sh '. .venv/bin/activate && pytest -v'
+            }
+        }
+
+        stage('Docker Build and Test') {
+            // Runs only when this Jenkins agent is allowed to use Docker
+            when {
+                expression { sh(returnStatus: true, script: 'docker info > /dev/null 2>&1') == 0 }
+            }
+            steps {
+                sh 'docker build --no-cache -t ${IMAGE_NAME}:${BUILD_NUMBER} .'
                 sh 'docker build -f Dockerfile.test -t ${IMAGE_NAME}-test:${BUILD_NUMBER} .'
                 sh 'docker run --rm ${IMAGE_NAME}-test:${BUILD_NUMBER}'
             }
@@ -39,8 +53,7 @@ pipeline {
     }
 
     post {
-        success { echo 'BUILD SUCCESS: image built and all tests passed.' }
+        success { echo 'BUILD SUCCESS: lint and all tests passed.' }
         failure { echo 'BUILD FAILED: check the console output above.' }
-        always  { sh 'docker image prune -f || true' }
     }
 }
