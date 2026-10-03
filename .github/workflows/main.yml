@@ -1,0 +1,52 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-lint:
+    name: Build & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Syntax check (compile)
+        run: python -m compileall -q app.py tests
+      - name: Lint with flake8
+        run: flake8 .
+
+  docker-build:
+    name: Docker Image Assembly
+    needs: build-and-lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build production image
+        run: docker build -t aceest-fitness:${{ github.sha }} .
+      - name: Smoke test container
+        run: |
+          docker run -d --name smoke -p 5000:5000 aceest-fitness:${{ github.sha }}
+          for i in $(seq 1 10); do
+            curl -fs http://localhost:5000/health && exit 0
+            sleep 2
+          done
+          docker logs smoke
+          exit 1
+
+  test:
+    name: Automated Testing (Pytest in Docker)
+    needs: docker-build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build test image
+        run: docker build -f Dockerfile.test -t aceest-fitness-test .
+      - name: Run Pytest inside container
+        run: docker run --rm aceest-fitness-test
